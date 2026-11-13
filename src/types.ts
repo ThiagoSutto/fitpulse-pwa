@@ -118,27 +118,17 @@ export interface BioimpedanceCheckin {
   notes?: string;
 }
 
-export interface StravaActivity {
-  id: string;
-  name: string;
-  environmentType: 'Esteira (Indoor)' | 'Parque (Outdoor)';
-  date: string;
-  distanceKm: number;
-  movingTimeMinutes: number;
-  paceFormatted: string; // min/km
-  activeCalories: number;
-  averageHeartrate?: number;
-}
+export type ActivityType = 'Esteira' | 'Corrida no Parque' | 'Handebol' | 'Outros';
 
-export interface StravaConfig {
-  connected: boolean;
-  clientId: string;
-  clientSecret: string;
-  accessToken: string;
-  refreshToken: string;
-  athleteName: string;
-  lastSyncAt: string | null;
-  activities: StravaActivity[];
+export interface CardiorespiratoryActivity {
+  id: string;
+  type: ActivityType;
+  date: string; // YYYY-MM-DD
+  timeMinutes: number;
+  distanceKm?: number;
+  caloriesBurned: number; // kcal principal
+  timestamp: string;
+  notes?: string;
 }
 
 export interface SyncConfiguration {
@@ -155,8 +145,8 @@ export interface AppState {
   selectedDate: string;
   foodsByDate: Record<string, FoodItem[]>;
   habitsByDate: Record<string, DailyHabitsLog>;
+  activitiesByDate: Record<string, CardiorespiratoryActivity[]>;
   workoutPlans: WorkoutDayPlan[];
   checkins: BioimpedanceCheckin[];
-  strava: StravaConfig;
   syncConfig: SyncConfiguration;
 }

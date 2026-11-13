@@ -7,9 +7,9 @@ export function generateGeminiMarkdownReport(state: AppState): string {
     selectedDate,
     foodsByDate,
     habitsByDate,
+    activitiesByDate,
     workoutPlans,
     checkins,
-    strava,
   } = state;
 
   const todayFoods: FoodItem[] = foodsByDate[selectedDate] || [];
@@ -22,6 +22,9 @@ export function generateGeminiMarkdownReport(state: AppState): string {
     machineAbs: false,
   };
 
+  const todayActivities = activitiesByDate[selectedDate] || [];
+  const todayActiveCalories = todayActivities.reduce((s, a) => s + a.caloriesBurned, 0);
+
   const todayTotals = todayFoods.reduce(
     (acc, item) => ({
       calories: acc.calories + item.calories,
@@ -31,6 +34,10 @@ export function generateGeminiMarkdownReport(state: AppState): string {
     }),
     { calories: 0, protein: 0, carbs: 0, fat: 0 }
   );
+
+  // Défice Calórico Real: (BMR + Gasto Ativo de Atividades) - Calorias Ingeridas
+  const totalExpenditure = profile.bmrKcal + todayActiveCalories;
+  const netDeficit = totalExpenditure - todayTotals.calories;
 
   const loggedDates = Object.keys(foodsByDate).filter(
     (d) => (foodsByDate[d] || []).length > 0
@@ -55,23 +62,18 @@ export function generateGeminiMarkdownReport(state: AppState): string {
   const avgProtein = Math.round((weeklyMacroSum.protein / daysCount) * 10) / 10;
 
   const todayWaterMl = todayHabits.waterCups250ml * 250;
-  const calDiffFromBmr = todayTotals.calories - profile.bmrKcal;
-  const calDiffSign = calDiffFromBmr >= 0 ? `+${calDiffFromBmr}` : `${calDiffFromBmr}`;
 
-  // Strava Active Calories
-  const stravaActivities = strava?.activities || [];
-  const totalStravaActiveCalories = stravaActivities.reduce(
-    (sum, a) => sum + a.activeCalories,
-    0
-  );
-  const stravaLines = stravaActivities
-    .map(
-      (a) =>
-        `  - **${a.date} (${a.environmentType})** — ${a.name}: **${a.distanceKm.toFixed(
-          2
-        )} km** | Pace **${a.paceFormatted}** | Active Calories: **+${a.activeCalories} kcal**`
-    )
-    .join('\n');
+  const activitiesLines =
+    todayActivities.length > 0
+      ? todayActivities
+          .map(
+            (a) =>
+              `  - **${a.type}** (${a.timeMinutes} min${
+                a.distanceKm ? ` | ${a.distanceKm.toFixed(1)} km` : ''
+              }): **+${a.caloriesBurned} kcal**${a.notes ? ` — _${a.notes}_` : ''}`
+          )
+          .join('\n')
+      : '  - _Nenhuma atividade gravada hoje._';
 
   const latestCheckin =
     checkins.length > 0 ? checkins[checkins.length - 1] : null;
@@ -133,7 +135,7 @@ export function generateGeminiMarkdownReport(state: AppState): string {
 ---
 
 ## 1. Histórico & Último Check-in de Bioimpedância (Zepp Life OCR)
-- **Avaliações Históricas Mapeadas:** ${checkins
+- **Avaliações Históricas:** ${checkins
     .map((c) => `${c.weekLabel} (${c.weightKg.toFixed(2)}kg / ${c.bodyFatPct.toFixed(1)}% BF)`)
     .join(' -> ')}
 ${
@@ -149,22 +151,27 @@ ${
 
 ---
 
-## 2. Balanço Nutricional, Orçamento Diário & Hidratação
-- **Calorias Ingeridas (Dia):** ${todayTotals.calories} kcal / Orçamento ${profile.caloriesBudgetKcal} kcal (Saldo: ${Math.max(0, profile.caloriesBudgetKcal - todayTotals.calories)} kcal) vs. **BMR (${profile.bmrKcal} kcal)** -> \`${calDiffSign} kcal\`
-- **Proteínas no Dia:** **${todayTotals.protein.toFixed(1)}g** (Meta: ${profile.proteinTargetMinG}g a ${profile.proteinTargetMaxG}g) — _${proteinStatus}_
-- **Carboidratos no Dia:** ${todayTotals.carbs.toFixed(1)}g / ${profile.carbsBudgetG}g | **Gorduras no Dia:** ${todayTotals.fat.toFixed(1)}g / ${profile.fatBudgetG}g
-- **Média Semanal (${daysCount} dia(s) mapeado(s)):** ${avgCalories} kcal/dia | **${avgProtein}g Proteína/dia**
-- **Água Consumida Hoje:** ${todayWaterMl} ml (${todayHabits.waterCups250ml} copos de 250ml) / Meta: ${profile.waterGoalMl} ml
-- **Passos Diários Hoje:** ${todayHabits.steps.toLocaleString('pt-BR')} passos (Meta: ${profile.stepsGoal.toLocaleString('pt-BR')})
+## 2. Balanço Energético & Défice Calórico Diário
+- **Metabolismo Basal (BMR):** ${profile.bmrKcal} kcal
+- **Gasto Calórico Ativo (Cardio & Desporto):** +${todayActiveCalories} kcal
+- **Gasto Energético Total Estimado:** **${totalExpenditure} kcal**
+- **Calorias Ingeridas:** **${todayTotals.calories} kcal**
+- **Défice Calórico Diário Controlado:** **\`${netDeficit >= 0 ? `Défice de -${netDeficit} kcal` : `Superávit de +${Math.abs(netDeficit)} kcal`}\`**
 
-### Distribuição nas Janelas da Rotina (${selectedDate})
-${windowsBreakdown}
+### Registo de Atividade Cardiorrespiratória e Desportiva Hoje
+${activitiesLines}
 
 ---
 
-## 3. Cardio Sincronizado via API do Strava (OAuth2)
-- **Gasto Calórico Ativo Acumulado (Active Calories):** **${totalStravaActiveCalories} kcal**
-${stravaLines}
+## 3. Balanço de Macronutrientes & Hidratação
+- **Proteínas no Dia:** **${todayTotals.protein.toFixed(1)}g** (Meta: ${profile.proteinTargetMinG}g a ${profile.proteinTargetMaxG}g) — _${proteinStatus}_
+- **Carboidratos no Dia:** ${todayTotals.carbs.toFixed(1)}g / ${profile.carbsBudgetG}g | **Gorduras no Dia:** ${todayTotals.fat.toFixed(1)}g / ${profile.fatBudgetG}g
+- **Média Semanal (${daysCount} dia(s)):** ${avgCalories} kcal/dia | **${avgProtein}g Proteína/dia**
+- **Água Consumida Hoje:** ${todayWaterMl} ml (${todayHabits.waterCups250ml} copos de 250ml) / Meta: ${profile.waterGoalMl} ml
+- **Passos Diários Hoje:** ${todayHabits.steps.toLocaleString('pt-BR')} passos
+
+### Distribuição nas Janelas da Rotina (${selectedDate})
+${windowsBreakdown}
 
 ---
 

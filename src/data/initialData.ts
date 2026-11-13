@@ -5,7 +5,7 @@ import {
   WorkoutDayPlan,
   BioimpedanceCheckin,
   ExerciseTemplate,
-  StravaActivity,
+  CardiorespiratoryActivity,
 } from '../types';
 
 export const INITIAL_USER_PROFILE: UserProfile = {
@@ -445,7 +445,7 @@ export const INITIAL_WORKOUT_PLANS: WorkoutDayPlan[] = [
   },
 ];
 
-// Histórico de Bioimpedância corrigido para as datas reais de avaliação:
+// Histórico de Bioimpedância nas datas reais de avaliação:
 // 20 de agosto, 28 de agosto e 17 de setembro de 2026
 export const INITIAL_CHECKINS: BioimpedanceCheckin[] = [
   {
@@ -498,38 +498,35 @@ export const INITIAL_CHECKINS: BioimpedanceCheckin[] = [
   },
 ];
 
-export const INITIAL_STRAVA_ACTIVITIES: StravaActivity[] = [
+// Exemplos iniciais pré-carregados de atividades cardiorrespiratórias e desportivas
+export const INITIAL_CARDIO_ACTIVITIES: CardiorespiratoryActivity[] = [
   {
-    id: 'strava_act_1',
-    name: 'Corrida Pós-Treino na Esteira (Inclinação 2%)',
-    environmentType: 'Esteira (Indoor)',
+    id: 'cardio_act_1',
+    type: 'Esteira',
     date: '2026-09-17',
-    distanceKm: 3.45,
-    movingTimeMinutes: 25,
-    paceFormatted: '7:14 /km',
-    activeCalories: 268,
-    averageHeartrate: 138,
+    timeMinutes: 25,
+    distanceKm: 3.4,
+    caloriesBurned: 270,
+    timestamp: '18:45',
+    notes: 'Corrida pós-treino na esteira com inclinação 2%',
   },
   {
-    id: 'strava_act_2',
-    name: 'Corrida Aeróbica no Parque',
-    environmentType: 'Parque (Outdoor)',
-    date: '2026-09-15',
-    distanceKm: 5.12,
-    movingTimeMinutes: 31,
-    paceFormatted: '6:03 /km',
-    activeCalories: 394,
-    averageHeartrate: 151,
+    id: 'cardio_act_2',
+    type: 'Handebol',
+    date: '2026-09-16',
+    timeMinutes: 50,
+    caloriesBurned: 520,
+    timestamp: '20:10',
+    notes: 'Treino tático e coletivo de handebol',
   },
   {
-    id: 'strava_act_3',
-    name: 'Trote Regenerativo na Esteira Pós-Pull',
-    environmentType: 'Esteira (Indoor)',
-    date: '2026-09-13',
-    distanceKm: 2.80,
-    movingTimeMinutes: 20,
-    paceFormatted: '7:08 /km',
-    activeCalories: 215,
-    averageHeartrate: 134,
+    id: 'cardio_act_3',
+    type: 'Corrida no Parque',
+    date: '2026-09-14',
+    timeMinutes: 32,
+    distanceKm: 5.1,
+    caloriesBurned: 395,
+    timestamp: '07:30',
+    notes: 'Corrida matinal contínua no parque',
   },
 ];

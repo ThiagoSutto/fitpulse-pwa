@@ -12,15 +12,14 @@ import {
 import {
   AppState,
   BioimpedanceCheckin,
+  CardiorespiratoryActivity,
   FoodItem,
   MealWindowId,
-  StravaConfig,
   SyncConfiguration,
   WorkoutDayId,
 } from './types';
 import {
   INITIAL_CHECKINS,
-  INITIAL_STRAVA_ACTIVITIES,
   INITIAL_USER_PROFILE,
   INITIAL_WORKOUT_PLANS,
   QUICK_FOOD_PRESETS,
@@ -31,10 +30,6 @@ import {
   saveStateToLocal,
   STORAGE_KEY,
 } from './services/storage';
-import {
-  exchangeStravaCodeForToken,
-  fetchStravaRunningActivities,
-} from './services/stravaService';
 import { generateGeminiMarkdownReport } from './utils/geminiReport';
 import { DashboardTab } from './components/DashboardTab';
 import { NutritionTab } from './components/NutritionTab';
@@ -52,38 +47,6 @@ export function App() {
   useEffect(() => {
     saveStateToLocal(state);
   }, [state]);
-
-  // Captura retorno OAuth2 do Strava (?code=...) caso redirecionado de volta do Strava
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const oauthCode = params.get('code');
-    if (oauthCode) {
-      window.history.replaceState({}, document.title, window.location.pathname);
-      (async () => {
-        const tokenData = await exchangeStravaCodeForToken(
-          oauthCode,
-          state.strava.clientId,
-          state.strava.clientSecret
-        );
-        const nextStrava: StravaConfig = {
-          ...state.strava,
-          connected: true,
-          accessToken: tokenData?.accessToken || state.strava.accessToken,
-          refreshToken: tokenData?.refreshToken || state.strava.refreshToken,
-          athleteName: tokenData?.athleteName || 'Atleta Strava OAuth2',
-          lastSyncAt: new Date().toLocaleString('pt-BR'),
-        };
-        const synced = await fetchStravaRunningActivities(nextStrava);
-        setState((prev) => ({
-          ...prev,
-          strava: {
-            ...nextStrava,
-            activities: synced.activities,
-          },
-        }));
-      })();
-    }
-  }, []);
 
   const ensureDateHabit = (dateStr: string) => {
     return (
@@ -158,6 +121,41 @@ export function App() {
     });
   };
 
+  const handleAddActivity = (
+    activity: Omit<CardiorespiratoryActivity, 'id' | 'timestamp'>
+  ) => {
+    const nowTime = new Date().toTimeString().slice(0, 5);
+    const newActivity: CardiorespiratoryActivity = {
+      ...activity,
+      id: `act_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      timestamp: nowTime,
+    };
+
+    setState((prev) => {
+      const existing = prev.activitiesByDate[activity.date] || [];
+      return {
+        ...prev,
+        activitiesByDate: {
+          ...prev.activitiesByDate,
+          [activity.date]: [newActivity, ...existing],
+        },
+      };
+    });
+  };
+
+  const handleRemoveActivity = (id: string) => {
+    setState((prev) => {
+      const existing = prev.activitiesByDate[prev.selectedDate] || [];
+      return {
+        ...prev,
+        activitiesByDate: {
+          ...prev.activitiesByDate,
+          [prev.selectedDate]: existing.filter((a) => a.id !== id),
+        },
+      };
+    });
+  };
+
   const handleUpdateWater = (deltaCups: number) => {
     setState((prev) => {
       const current = ensureDateHabit(prev.selectedDate);
@@ -189,16 +187,6 @@ export function App() {
         },
       };
     });
-  };
-
-  const handleUpdateStrava = (changes: Partial<StravaConfig>) => {
-    setState((prev) => ({
-      ...prev,
-      strava: {
-        ...prev.strava,
-        ...changes,
-      },
-    }));
   };
 
   const handleUpdateSet = (
@@ -285,18 +273,9 @@ export function App() {
       selectedDate: today,
       foodsByDate: {},
       habitsByDate: {},
+      activitiesByDate: {},
       workoutPlans: INITIAL_WORKOUT_PLANS,
       checkins: INITIAL_CHECKINS,
-      strava: {
-        connected: true,
-        clientId: '128492',
-        clientSecret: '',
-        accessToken: '',
-        refreshToken: '',
-        athleteName: 'Atleta Baseline (Strava Sync)',
-        lastSyncAt: '17/09/2026 19:15',
-        activities: INITIAL_STRAVA_ACTIVITIES,
-      },
       syncConfig: {
         provider: 'local',
         supabaseUrl: '',
@@ -339,7 +318,7 @@ export function App() {
                   FitPulse Pro
                 </h1>
                 <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-[9px] font-bold uppercase text-emerald-300">
-                  PWA v2
+                  PWA
                 </span>
               </div>
               <p className="text-[11px] text-slate-400">
@@ -397,7 +376,8 @@ export function App() {
             onQuickAddFood={handleQuickAddPreset}
             onUpdateWater={handleUpdateWater}
             onUpdateSteps={handleUpdateSteps}
-            onUpdateStrava={handleUpdateStrava}
+            onAddActivity={handleAddActivity}
+            onRemoveActivity={handleRemoveActivity}
             onNavigateTab={setActiveTab}
           />
         )}

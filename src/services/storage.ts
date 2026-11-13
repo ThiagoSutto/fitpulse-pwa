@@ -3,12 +3,10 @@ import {
   INITIAL_USER_PROFILE,
   INITIAL_WORKOUT_PLANS,
   INITIAL_CHECKINS,
-  INITIAL_STRAVA_ACTIVITIES,
+  INITIAL_CARDIO_ACTIVITIES,
 } from '../data/initialData';
 
-// Nova chave v2 para aplicar automaticamente as datas corrigidas (20/08, 28/08, 17/09/2026)
-// e a nova estrutura de treinos PPL + Core diário
-export const STORAGE_KEY = 'fitpulse_pro_state_v2';
+export const STORAGE_KEY = 'fitpulse_pro_state_v3';
 
 export function getTodayIso(): string {
   const now = new Date();
@@ -29,6 +27,9 @@ export function loadInitialState(): AppState {
         selectedDate: parsed.selectedDate || today,
         foodsByDate: parsed.foodsByDate || {},
         habitsByDate: parsed.habitsByDate || {},
+        activitiesByDate: parsed.activitiesByDate || {
+          [today]: INITIAL_CARDIO_ACTIVITIES.slice(0, 1).map((a) => ({ ...a, date: today })),
+        },
         workoutPlans:
           Array.isArray(parsed.workoutPlans) && parsed.workoutPlans.length > 0
             ? parsed.workoutPlans
@@ -37,16 +38,6 @@ export function loadInitialState(): AppState {
           Array.isArray(parsed.checkins) && parsed.checkins.length > 0
             ? parsed.checkins
             : INITIAL_CHECKINS,
-        strava: parsed.strava || {
-          connected: true,
-          clientId: '128492',
-          clientSecret: '',
-          accessToken: '',
-          refreshToken: '',
-          athleteName: 'Atleta Baseline (Strava Sync)',
-          lastSyncAt: '17/09/2026 19:15',
-          activities: INITIAL_STRAVA_ACTIVITIES,
-        },
         syncConfig: parsed.syncConfig || {
           provider: 'local',
           supabaseUrl: '',
@@ -111,25 +102,64 @@ export function loadInitialState(): AppState {
       [today]: {
         date: today,
         waterCups250ml: 6,
-        steps: 4850,
+        steps: 5400,
         postWorkoutCardio: true,
         cardioMinutes: 25,
         machineAbs: true,
         activeWorkoutDayId: 'monday_push_a',
       },
     },
+    activitiesByDate: {
+      [today]: [
+        {
+          id: 'act_seed_today',
+          type: 'Esteira',
+          date: today,
+          timeMinutes: 25,
+          distanceKm: 3.5,
+          caloriesBurned: 270,
+          timestamp: '18:40',
+          notes: 'Corrida pós-treino na esteira com inclinação leve',
+        },
+      ],
+      '2026-09-17': [
+        {
+          id: 'act_seed_17',
+          type: 'Esteira',
+          date: '2026-09-17',
+          timeMinutes: 25,
+          distanceKm: 3.4,
+          caloriesBurned: 270,
+          timestamp: '18:45',
+          notes: 'Corrida pós-treino na esteira',
+        },
+      ],
+      '2026-09-16': [
+        {
+          id: 'act_seed_16',
+          type: 'Handebol',
+          date: '2026-09-16',
+          timeMinutes: 50,
+          caloriesBurned: 520,
+          timestamp: '20:10',
+          notes: 'Treino tático e coletivo de handebol',
+        },
+      ],
+      '2026-09-14': [
+        {
+          id: 'act_seed_14',
+          type: 'Corrida no Parque',
+          date: '2026-09-14',
+          timeMinutes: 32,
+          distanceKm: 5.1,
+          caloriesBurned: 395,
+          timestamp: '07:30',
+          notes: 'Corrida matinal contínua no parque',
+        },
+      ],
+    },
     workoutPlans: INITIAL_WORKOUT_PLANS,
     checkins: INITIAL_CHECKINS,
-    strava: {
-      connected: true,
-      clientId: '128492',
-      clientSecret: '',
-      accessToken: '',
-      refreshToken: '',
-      athleteName: 'Atleta Baseline (Strava Sync)',
-      lastSyncAt: '17/09/2026 19:15',
-      activities: INITIAL_STRAVA_ACTIVITIES,
-    },
     syncConfig: {
       provider: 'local',
       supabaseUrl: '',
@@ -225,7 +255,7 @@ export async function syncWithRemoteBackend(
 
   return {
     ok: true,
-    message: 'Estado salvo localmente (LocalFirst / PWA Storage pronto para migração).',
+    message: 'Estado salvo localmente (Local PWA Storage pronto para migração).',
     timestamp: nowIso,
   };
 }
@@ -258,6 +288,7 @@ class SyncPayload(BaseModel):
     profile: Dict[str, Any]
     foodsByDate: Dict[str, List[Dict[str, Any]]]
     habitsByDate: Dict[str, Dict[str, Any]]
+    activitiesByDate: Dict[str, List[Dict[str, Any]]]
     workoutPlans: List[Dict[str, Any]]
     checkins: List[Dict[str, Any]]
 

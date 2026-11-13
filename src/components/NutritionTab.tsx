@@ -12,6 +12,7 @@ import {
   Globe,
   CheckCircle2,
   Calculator,
+  Flame,
 } from 'lucide-react';
 import { AppState, FoodItem, MealWindowId } from '../types';
 import { MEAL_WINDOWS, QUICK_FOOD_PRESETS } from '../data/initialData';
@@ -50,7 +51,7 @@ export const NutritionTab: React.FC<NutritionTabProps> = ({
   const [portionGrams, setPortionGrams] = useState<number>(100);
   const [feedbackBanner, setFeedbackBanner] = useState<string | null>(null);
 
-  const { profile, selectedDate, foodsByDate, habitsByDate } = state;
+  const { profile, selectedDate, foodsByDate, habitsByDate, activitiesByDate } = state;
   const todayFoods = foodsByDate[selectedDate] || [];
   const todayHabits = habitsByDate[selectedDate] || {
     date: selectedDate,
@@ -60,6 +61,9 @@ export const NutritionTab: React.FC<NutritionTabProps> = ({
     cardioMinutes: 20,
     machineAbs: false,
   };
+
+  const todayActivities = activitiesByDate[selectedDate] || [];
+  const totalBurnedToday = todayActivities.reduce((sum, act) => sum + act.caloriesBurned, 0);
 
   const totals = todayFoods.reduce(
     (acc, item) => ({
@@ -71,8 +75,10 @@ export const NutritionTab: React.FC<NutritionTabProps> = ({
     { calories: 0, protein: 0, carbs: 0, fat: 0 }
   );
 
-  // Abatimento automático do orçamento diário de macros e calorias
-  const remainingKcal = profile.caloriesBudgetKcal - totals.calories;
+  // Orçamento Diário Ajustado: Calorias Base + Calorias Queimadas em Atividades
+  const dynamicCaloriesBudget = profile.caloriesBudgetKcal + totalBurnedToday;
+  const remainingKcal = dynamicCaloriesBudget - totals.calories;
+
   const remainingProteinMin = Math.max(0, profile.proteinTargetMinG - totals.protein);
   const remainingProteinMax = profile.proteinTargetMaxG - totals.protein;
   const remainingCarbs = profile.carbsBudgetG - totals.carbs;
@@ -83,7 +89,6 @@ export const NutritionTab: React.FC<NutritionTabProps> = ({
     setTimeout(() => setFeedbackBanner(null), 2800);
   };
 
-  // Busca instantânea na Tabela TACO ao digitar + API Open Food Facts
   useEffect(() => {
     let active = true;
     const timer = setTimeout(async () => {
@@ -155,7 +160,8 @@ export const NutritionTab: React.FC<NutritionTabProps> = ({
             <h2 className="text-base font-extrabold text-white mt-0.5">
               Consumido: {totals.calories} kcal{' '}
               <span className="text-xs font-normal text-slate-400">
-                (BMR: {profile.bmrKcal} kcal | Teto: {profile.caloriesBudgetKcal} kcal)
+                (Orçamento: {dynamicCaloriesBudget} kcal
+                {totalBurnedToday > 0 && ` [${profile.caloriesBudgetKcal} base + ${totalBurnedToday} atividade]`})
               </span>
             </h2>
           </div>
@@ -174,15 +180,24 @@ export const NutritionTab: React.FC<NutritionTabProps> = ({
           </div>
         </div>
 
-        {/* Barras de Abatimento por Macro (Proteína, Carbo, Gordura e Kcal) */}
+        {totalBurnedToday > 0 && (
+          <div className="mb-3 flex items-center justify-between rounded-xl border border-orange-500/30 bg-orange-950/20 px-3 py-2 text-xs text-orange-300">
+            <span className="flex items-center gap-1.5 font-bold">
+              <Flame className="h-3.5 w-3.5" />
+              Gasto Ativo Somado ao Orçamento: +{totalBurnedToday} kcal queimadas
+            </span>
+            <span className="text-[11px] text-slate-400">
+              {todayActivities.length} atividade(s)
+            </span>
+          </div>
+        )}
+
+        {/* Barras de Abatimento por Macro */}
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-          {/* Proteína */}
           <div className="rounded-xl border border-slate-800 bg-slate-950/90 p-2.5">
             <div className="flex items-center justify-between text-[10px] uppercase text-slate-400">
               <span>Proteína</span>
-              <span className="font-bold text-emerald-400">
-                160–180g
-              </span>
+              <span className="font-bold text-emerald-400">160–180g</span>
             </div>
             <div className="mt-1 text-sm font-extrabold text-white">
               {totals.protein.toFixed(1)}g
@@ -205,7 +220,6 @@ export const NutritionTab: React.FC<NutritionTabProps> = ({
             </div>
           </div>
 
-          {/* Carboidrato */}
           <div className="rounded-xl border border-slate-800 bg-slate-950/90 p-2.5">
             <div className="flex items-center justify-between text-[10px] uppercase text-slate-400">
               <span>Carboidrato</span>
@@ -230,7 +244,6 @@ export const NutritionTab: React.FC<NutritionTabProps> = ({
             </div>
           </div>
 
-          {/* Gorduras */}
           <div className="rounded-xl border border-slate-800 bg-slate-950/90 p-2.5">
             <div className="flex items-center justify-between text-[10px] uppercase text-slate-400">
               <span>Gorduras</span>
@@ -255,12 +268,11 @@ export const NutritionTab: React.FC<NutritionTabProps> = ({
             </div>
           </div>
 
-          {/* Calorias */}
           <div className="rounded-xl border border-slate-800 bg-slate-950/90 p-2.5">
             <div className="flex items-center justify-between text-[10px] uppercase text-slate-400">
               <span>Calorias</span>
               <span className="font-bold text-slate-200">
-                {profile.caloriesBudgetKcal}
+                {dynamicCaloriesBudget}
               </span>
             </div>
             <div className="mt-1 text-sm font-extrabold text-white">
@@ -272,7 +284,7 @@ export const NutritionTab: React.FC<NutritionTabProps> = ({
                 style={{
                   width: `${Math.min(
                     100,
-                    Math.round((totals.calories / profile.caloriesBudgetKcal) * 100)
+                    Math.round((totals.calories / dynamicCaloriesBudget) * 100)
                   )}%`,
                 }}
               />
@@ -364,7 +376,7 @@ export const NutritionTab: React.FC<NutritionTabProps> = ({
         </div>
       </section>
 
-      {/* 3. BUSCA INTEGRADA: TABELA TACO + API OPEN FOOD FACTS COM SELETOR DE PORÇÃO */}
+      {/* 3. BUSCA INTEGRADA: TABELA TACO + API OPEN FOOD FACTS */}
       <section className="rounded-2xl border border-slate-800 bg-slate-900/90 p-4">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
           <div className="flex items-center gap-2">
@@ -419,7 +431,6 @@ export const NutritionTab: React.FC<NutritionTabProps> = ({
             </button>
           </div>
 
-          {/* Seletor Rápido de Porção (Chips + Input Numérico) */}
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-800 bg-slate-950 p-2.5">
             <div className="flex items-center gap-1.5">
               <span className="text-xs font-bold text-slate-300">Porção:</span>
@@ -461,7 +472,6 @@ export const NutritionTab: React.FC<NutritionTabProps> = ({
           </div>
         </form>
 
-        {/* Lista de Resultados com Cálculo Dinâmico da Porção */}
         <div className="mt-3 space-y-2">
           <div className="custom-scroller max-h-72 space-y-2 overflow-y-auto pr-1">
             {searchResults.map((prod) => {
@@ -609,7 +619,7 @@ export const NutritionTab: React.FC<NutritionTabProps> = ({
         })}
       </section>
 
-      {/* 5. CONTADOR RÁPIDO DE ÁGUA E PASSOS NO RODAPÉ DO DIÁRIO */}
+      {/* 5. CONTADOR RÁPIDO DE ÁGUA E PASSOS */}
       <section className="rounded-2xl border border-slate-800 bg-slate-900/90 p-4">
         <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">
           Hidratação & Movimento do Dia

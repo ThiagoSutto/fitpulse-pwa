@@ -13,20 +13,14 @@ import {
   Copy,
   ChevronRight,
   SlidersHorizontal,
-  RefreshCw,
-  ExternalLink,
-  Timer,
-  MapPin,
-  Heart,
-  Link2,
+  PlusCircle,
+  TrendingDown,
+  Calculator,
 } from 'lucide-react';
-import { AppState, MealWindowId, StravaConfig } from '../types';
+import { AppState, MealWindowId, CardiorespiratoryActivity } from '../types';
 import { QUICK_FOOD_PRESETS, MEAL_WINDOWS } from '../data/initialData';
 import { generateGeminiMarkdownReport } from '../utils/geminiReport';
-import {
-  buildStravaOAuthAuthorizeUrl,
-  fetchStravaRunningActivities,
-} from '../services/stravaService';
+import { ActivityTracker } from './ActivityTracker';
 
 interface DashboardTabProps {
   state: AppState;
@@ -34,7 +28,8 @@ interface DashboardTabProps {
   onQuickAddFood: (presetId: string, windowId?: MealWindowId) => void;
   onUpdateWater: (deltaCups: number) => void;
   onUpdateSteps: (steps: number) => void;
-  onUpdateStrava: (changes: Partial<StravaConfig>) => void;
+  onAddActivity: (activity: Omit<CardiorespiratoryActivity, 'id' | 'timestamp'>) => void;
+  onRemoveActivity: (id: string) => void;
   onNavigateTab: (tab: 'dashboard' | 'nutrition' | 'workout' | 'checkin' | 'sync') => void;
 }
 
@@ -44,7 +39,8 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   onQuickAddFood,
   onUpdateWater,
   onUpdateSteps,
-  onUpdateStrava,
+  onAddActivity,
+  onRemoveActivity,
   onNavigateTab,
 }) => {
   const [copiedReport, setCopiedReport] = useState(false);
@@ -52,13 +48,16 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   const [quickMealTarget, setQuickMealTarget] = useState<MealWindowId>('lunch');
   const [lastAddedToast, setLastAddedToast] = useState<string | null>(null);
 
-  // Estado do painel Strava OAuth2
-  const [isSyncingStrava, setIsSyncingStrava] = useState(false);
-  const [showStravaOAuthModal, setShowStravaOAuthModal] = useState(false);
-  const [stravaFeedback, setStravaFeedback] = useState<string | null>(null);
+  const {
+    profile,
+    selectedDate,
+    foodsByDate,
+    habitsByDate,
+    activitiesByDate,
+    checkins,
+    workoutPlans,
+  } = state;
 
-  const { profile, selectedDate, foodsByDate, habitsByDate, checkins, workoutPlans, strava } =
-    state;
   const todayFoods = foodsByDate[selectedDate] || [];
   const todayHabits = habitsByDate[selectedDate] || {
     date: selectedDate,
@@ -69,7 +68,10 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     machineAbs: false,
   };
 
-  const totals = todayFoods.reduce(
+  const todayActivities = activitiesByDate[selectedDate] || [];
+
+  // 1. Calorias Consumidas através da alimentação
+  const foodTotals = todayFoods.reduce(
     (acc, item) => ({
       calories: acc.calories + item.calories,
       protein: acc.protein + item.protein,
@@ -79,23 +81,27 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     { calories: 0, protein: 0, carbs: 0, fat: 0 }
   );
 
-  // Soma automática do gasto calórico ativo (Active Calories) das corridas sincronizadas do Strava
-  const stravaActivities = strava?.activities || [];
-  const totalStravaActiveCalories = stravaActivities.reduce(
-    (sum, act) => sum + act.activeCalories,
-    0
-  );
-  const totalStravaDistanceKm = stravaActivities.reduce(
-    (sum, act) => sum + act.distanceKm,
+  // 2. Gasto Calórico Ativo Somado (Cardio, Handebol, Esteira, etc.)
+  const totalActiveCalories = todayActivities.reduce(
+    (sum, act) => sum + act.caloriesBurned,
     0
   );
 
+  // 3. Regra de Negócio: Gasto Total = BMR + Gasto Ativo
+  // Défice Calórico = Gasto Total - Calorias Ingeridas
+  const totalExpenditure = profile.bmrKcal + totalActiveCalories;
+  const netDeficitKcal = totalExpenditure - foodTotals.calories;
+
+  // Orçamento Dinâmico: Orçamento Base + Gasto Ativo de Atividades
+  const dynamicBudgetKcal = profile.caloriesBudgetKcal + totalActiveCalories;
+  const remainingBudgetKcal = dynamicBudgetKcal - foodTotals.calories;
+
   const proteinGoalMet =
-    totals.protein >= profile.proteinTargetMinG &&
-    totals.protein <= profile.proteinTargetMaxG + 15;
+    foodTotals.protein >= profile.proteinTargetMinG &&
+    foodTotals.protein <= profile.proteinTargetMaxG + 15;
   const proteinProgressPct = Math.min(
     100,
-    Math.round((totals.protein / profile.proteinTargetMinG) * 100)
+    Math.round((foodTotals.protein / profile.proteinTargetMinG) * 100)
   );
 
   const waterMl = todayHabits.waterCups250ml * 250;
@@ -130,31 +136,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     setTimeout(() => setLastAddedToast(null), 2200);
   };
 
-  const handleSyncStravaActivities = async () => {
-    setIsSyncingStrava(true);
-    const res = await fetchStravaRunningActivities(strava);
-    const nowFormatted = new Date().toLocaleString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-    onUpdateStrava({
-      connected: true,
-      activities: res.activities,
-      lastSyncAt: nowFormatted,
-    });
-    setStravaFeedback(res.message);
-    setIsSyncingStrava(false);
-    setTimeout(() => setStravaFeedback(null), 3500);
-  };
-
-  const handleStartStravaOAuthRedirect = () => {
-    const authUrl = buildStravaOAuthAuthorizeUrl(strava.clientId);
-    window.open(authUrl, '_blank', 'noopener,noreferrer');
-  };
-
   const totalCompletedSets = workoutPlans.reduce(
     (sum, plan) =>
       sum +
@@ -183,7 +164,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 Sincronizar Semana & Dia com o Gemini
               </h2>
               <p className="text-xs text-slate-300 leading-relaxed">
-                Compila calorias vs. BMR ({profile.bmrKcal} kcal), proteínas, gasto ativo Strava, cargas máximas PPL e último check-in Zepp Life (17/Set/2026) em Markdown.
+                Compila calorias vs. BMR ({profile.bmrKcal} kcal), gasto ativo (+{totalActiveCalories} kcal), proteínas, cargas máximas PPL e último check-in Zepp Life (17/Set/2026) em Markdown.
               </p>
             </div>
           </div>
@@ -295,9 +276,97 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         </div>
       </section>
 
-      {/* 3. PAINEL DE META PROTEICA (160g–180g) E ORÇAMENTO DE MACROS */}
+      {/* 3. CALCULADORA DE BALANÇO & DÉFICE CALÓRICO INTEGRADO */}
+      <section
+        aria-label="Calculadora de Défice Calórico"
+        className="rounded-2xl border border-slate-800 bg-slate-900/90 p-4"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <div className="flex items-center gap-2">
+            <Calculator className="h-4 w-4 text-emerald-400" />
+            <div>
+              <h3 className="text-sm font-bold text-white">
+                Controlo Exato de Défice Calórico
+              </h3>
+              <p className="text-[11px] text-slate-400">
+                (Metabolismo Basal + Gasto Ativo de Atividades) − Calorias da Alimentação
+              </p>
+            </div>
+          </div>
+
+          <div
+            className={`rounded-xl border px-3 py-1.5 text-right ${
+              netDeficitKcal >= 0
+                ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-300'
+                : 'border-amber-500/50 bg-amber-500/15 text-amber-300'
+            }`}
+          >
+            <div className="text-[10px] uppercase text-slate-400">Estado Diário</div>
+            <div className="text-sm font-extrabold">
+              {netDeficitKcal >= 0
+                ? `Défice de -${netDeficitKcal} kcal`
+                : `Superávit de +${Math.abs(netDeficitKcal)} kcal`}
+            </div>
+          </div>
+        </div>
+
+        {/* 4 Cards de Resumo Energético */}
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {/* Basal BMR */}
+          <div className="rounded-xl border border-slate-800 bg-slate-950 p-2.5">
+            <div className="text-[10px] uppercase text-slate-400">1. Basal (BMR)</div>
+            <div className="mt-0.5 text-sm font-extrabold text-slate-200">
+              {profile.bmrKcal} <span className="text-[10px] text-slate-400">kcal</span>
+            </div>
+            <div className="text-[10px] text-slate-500 mt-1">Balança Zepp Life</div>
+          </div>
+
+          {/* Gasto Ativo Somado */}
+          <div className="rounded-xl border border-orange-500/40 bg-orange-950/20 p-2.5">
+            <div className="text-[10px] uppercase text-orange-400">2. Gasto Ativo (+)</div>
+            <div className="mt-0.5 text-sm font-extrabold text-orange-400 flex items-center gap-1">
+              <Flame className="h-3.5 w-3.5" />
+              <span>+{totalActiveCalories} kcal</span>
+            </div>
+            <div className="text-[10px] text-slate-400 mt-1">
+              {todayActivities.length} atividade(s) hoje
+            </div>
+          </div>
+
+          {/* Ingestão Alimentar */}
+          <div className="rounded-xl border border-slate-800 bg-slate-950 p-2.5">
+            <div className="text-[10px] uppercase text-slate-400">3. Alimentação (−)</div>
+            <div className="mt-0.5 text-sm font-extrabold text-white">
+              {foodTotals.calories} <span className="text-[10px] text-slate-400">kcal</span>
+            </div>
+            <div className="text-[10px] text-slate-400 mt-1">
+              {todayFoods.length} itens no diário
+            </div>
+          </div>
+
+          {/* Saldo do Orçamento com Abatimento */}
+          <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/20 p-2.5">
+            <div className="text-[10px] uppercase text-emerald-400">Saldo Orçamento</div>
+            <div className="mt-0.5 text-sm font-extrabold text-emerald-300">
+              {remainingBudgetKcal >= 0 ? `${remainingBudgetKcal} kcal` : `${remainingBudgetKcal} kcal`}
+            </div>
+            <div className="text-[10px] text-slate-400 mt-1">
+              Teto ajustado: {dynamicBudgetKcal} kcal
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 4. NOVO COMPONENTE: REGISTO DE ATIVIDADE RÁPIDO (CARDIO & DESPORTO) */}
+      <ActivityTracker
+        selectedDate={selectedDate}
+        activities={todayActivities}
+        onAddActivity={onAddActivity}
+        onRemoveActivity={onRemoveActivity}
+      />
+
+      {/* 5. PAINEL DE META PROTEICA (160g–180g) E MACROS */}
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {/* Card Proteína Diária */}
         <div
           className={`rounded-2xl border p-4 transition-colors ${
             proteinGoalMet
@@ -323,14 +392,14 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           <div className="mt-2 flex items-baseline justify-between">
             <div>
               <span className="text-3xl font-extrabold text-white">
-                {totals.protein.toFixed(1)}
+                {foodTotals.protein.toFixed(1)}
               </span>
               <span className="ml-1 text-sm font-semibold text-emerald-400">g</span>
             </div>
             <span className="text-xs text-slate-400">
-              {totals.protein < profile.proteinTargetMinG
-                ? `Restam ${(profile.proteinTargetMinG - totals.protein).toFixed(1)}g p/ piso`
-                : 'Janela proteica atingida'}
+              {foodTotals.protein < profile.proteinTargetMinG
+                ? `Faltam ${(profile.proteinTargetMinG - foodTotals.protein).toFixed(1)}g p/ piso`
+                : 'Janela anabólica atingida'}
             </span>
           </div>
 
@@ -342,285 +411,59 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           </div>
 
           <div className="mt-2.5 flex items-center justify-between text-[11px] text-slate-400">
-            <span>Consumido: {totals.protein.toFixed(0)}g</span>
+            <span>Consumido: {foodTotals.protein.toFixed(0)}g</span>
             <span className="font-semibold text-emerald-400">
-              Saldo teto (180g): {Math.max(0, profile.proteinTargetMaxG - totals.protein).toFixed(0)}g
+              Teto (180g): {Math.max(0, profile.proteinTargetMaxG - foodTotals.protein).toFixed(0)}g
             </span>
           </div>
         </div>
 
-        {/* Card Calorias vs BMR + Abatimento do Orçamento */}
+        {/* Card de Macronutrientes da Alimentação */}
         <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-4">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-              Orçamento Diário & BMR
+              Macros da Dieta
             </span>
-            <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-300">
-              <Flame className="h-3.5 w-3.5 text-emerald-400" />
-              BMR: {profile.bmrKcal} kcal
-            </span>
-          </div>
-
-          <div className="mt-2 flex items-baseline justify-between">
-            <div>
-              <span className="text-3xl font-extrabold text-white">
-                {totals.calories}
-              </span>
-              <span className="ml-1 text-xs font-semibold text-slate-400">
-                / {profile.caloriesBudgetKcal} kcal
-              </span>
-            </div>
-            <span className="rounded-lg bg-slate-800 px-2 py-1 text-xs font-medium text-emerald-300">
-              Saldo: {Math.max(0, profile.caloriesBudgetKcal - totals.calories)} kcal
+            <span className="text-xs text-slate-400">
+              Alimentos de {selectedDate}
             </span>
           </div>
 
-          <div className="mt-3 grid grid-cols-3 gap-2 pt-1 border-t border-slate-800/80 text-center">
-            <div className="rounded-lg bg-slate-950/60 px-2 py-1.5">
+          <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+            <div className="rounded-xl bg-slate-950 p-2 border border-slate-800">
               <div className="text-[10px] uppercase text-slate-400">Proteínas</div>
-              <div className="text-xs font-bold text-emerald-400">
-                {totals.protein.toFixed(0)}/{profile.proteinTargetMaxG}g
+              <div className="text-sm font-extrabold text-emerald-400 mt-0.5">
+                {foodTotals.protein.toFixed(0)}g
               </div>
+              <div className="text-[9px] text-slate-500">160–180g</div>
             </div>
-            <div className="rounded-lg bg-slate-950/60 px-2 py-1.5">
+            <div className="rounded-xl bg-slate-950 p-2 border border-slate-800">
               <div className="text-[10px] uppercase text-slate-400">Carbos</div>
-              <div className="text-xs font-bold text-sky-400">
-                {totals.carbs.toFixed(0)}/{profile.carbsBudgetG}g
+              <div className="text-sm font-extrabold text-sky-400 mt-0.5">
+                {foodTotals.carbs.toFixed(0)}g
               </div>
+              <div className="text-[9px] text-slate-500">/ {profile.carbsBudgetG}g</div>
             </div>
-            <div className="rounded-lg bg-slate-950/60 px-2 py-1.5">
+            <div className="rounded-xl bg-slate-950 p-2 border border-slate-800">
               <div className="text-[10px] uppercase text-slate-400">Gorduras</div>
-              <div className="text-xs font-bold text-amber-400">
-                {totals.fat.toFixed(0)}/{profile.fatBudgetG}g
+              <div className="text-sm font-extrabold text-amber-400 mt-0.5">
+                {foodTotals.fat.toFixed(0)}g
               </div>
+              <div className="text-[9px] text-slate-500">/ {profile.fatBudgetG}g</div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* 4. INTEGRAÇÃO DE CARDIO COM API DO STRAVA (OAUTH2 + CORRIDAS ESTEIRA E PARQUE) */}
-      <section
-        aria-label="Integração Strava Cardio"
-        className="rounded-2xl border border-orange-500/30 bg-gradient-to-br from-orange-950/25 via-slate-900 to-slate-900 p-4"
-      >
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-500/20 border border-orange-500/40 text-orange-400 font-extrabold text-xs">
-              STV
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-bold text-white">
-                  Cardio Automatizado — Strava API (OAuth2)
-                </h3>
-                <span className="rounded-full bg-emerald-500/20 border border-emerald-500/40 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
-                  {strava.connected ? 'OAuth2 Conectado' : 'Aguardando Auth'}
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-400">
-                Corridas de esteira e parque sincronizadas automaticamente (sem preenchimento manual)
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={handleSyncStravaActivities}
-              disabled={isSyncingStrava}
-              className="touch-target flex items-center gap-1.5 rounded-xl bg-orange-500/20 border border-orange-500/40 px-3 py-2 text-xs font-bold text-orange-300 hover:bg-orange-500/30 cursor-pointer"
-            >
-              <RefreshCw
-                className={`h-3.5 w-3.5 ${isSyncingStrava ? 'animate-spin' : ''}`}
-              />
-              <span>Sincronizar Strava</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowStravaOAuthModal((v) => !v)}
-              className="touch-target flex items-center gap-1 rounded-xl border border-slate-700 bg-slate-800/90 px-2.5 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-700 cursor-pointer"
-              title="Configurar credenciais OAuth2 do Strava"
-            >
-              <Link2 className="h-3.5 w-3.5 text-orange-400" />
-              <span>OAuth2</span>
-            </button>
-          </div>
-        </div>
-
-        {stravaFeedback && (
-          <div
-            role="status"
-            className="mb-3 rounded-xl border border-emerald-500/40 bg-emerald-500/15 px-3 py-2 text-xs font-semibold text-emerald-300"
-          >
-            ✓ {stravaFeedback}
-          </div>
-        )}
-
-        {/* Modal/Drawer de Configuração OAuth2 Strava */}
-        {showStravaOAuthModal && (
-          <div className="mb-3 space-y-2.5 rounded-xl border border-orange-500/40 bg-slate-950 p-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-orange-400">
-                Fluxo de Autorização OAuth2 — Strava API v3
-              </span>
-              <span className="text-[10px] text-slate-400">
-                Scope: read,activity:read_all
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <div>
-                <label
-                  htmlFor="strava-client-id"
-                  className="block text-[10px] font-semibold uppercase text-slate-400 mb-1"
-                >
-                  Strava Client ID
-                </label>
-                <input
-                  id="strava-client-id"
-                  type="text"
-                  value={strava.clientId}
-                  onChange={(e) => onUpdateStrava({ clientId: e.target.value })}
-                  placeholder="Ex: 128492"
-                  autoCorrect="off"
-                  autoCapitalize="off"
-                  spellCheck={false}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-sm text-white"
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="strava-token"
-                  className="block text-[10px] font-semibold uppercase text-slate-400 mb-1"
-                >
-                  Access Token (Bearer OAuth2)
-                </label>
-                <input
-                  id="strava-token"
-                  type="password"
-                  value={strava.accessToken}
-                  onChange={(e) => onUpdateStrava({ accessToken: e.target.value })}
-                  placeholder="Token OAuth2 ou vazio p/ feed sincronizado"
-                  autoCorrect="off"
-                  autoCapitalize="off"
-                  spellCheck={false}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-sm text-white"
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-              <button
-                type="button"
-                onClick={handleStartStravaOAuthRedirect}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-orange-500 px-3 py-2 text-xs font-bold text-slate-950 hover:bg-orange-400 cursor-pointer"
-              >
-                <ExternalLink className="h-3.5 w-3.5" />
-                <span>Autorizar no Strava (OAuth2 Redirect)</span>
-              </button>
-              <span className="text-[11px] text-slate-400">
-                Última sincronização: {strava.lastSyncAt || 'Agora'}
-              </span>
-            </div>
-          </div>
-        )}
-
-        {/* Resumo de Gasto Calórico Ativo Somado Automaticamente */}
-        <div className="grid grid-cols-3 gap-2 mb-3">
-          <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-2.5">
-            <div className="text-[10px] uppercase text-slate-400">
-              Active Calories (Soma)
-            </div>
-            <div className="mt-0.5 text-base font-extrabold text-orange-400 flex items-center gap-1">
-              <Flame className="h-4 w-4" />
-              <span>{totalStravaActiveCalories} kcal</span>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-2.5">
-            <div className="text-[10px] uppercase text-slate-400">
-              Distância Acumulada
-            </div>
-            <div className="mt-0.5 text-base font-extrabold text-white">
-              {totalStravaDistanceKm.toFixed(2)}{' '}
-              <span className="text-xs font-normal text-slate-400">km</span>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-2.5">
-            <div className="text-[10px] uppercase text-slate-400">
-              Corridas Mapeadas
-            </div>
-            <div className="mt-0.5 text-base font-extrabold text-emerald-400">
-              {stravaActivities.length}{' '}
-              <span className="text-xs font-normal text-slate-400">sessões</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Lista de Atividades de Corrida (Esteira e Parque) */}
-        <div className="space-y-2">
-          {stravaActivities.map((act) => (
-            <div
-              key={act.id}
-              className="flex items-center justify-between gap-2 rounded-xl border border-slate-800/90 bg-slate-950/90 p-3"
-            >
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span
-                    className={`rounded-md px-2 py-0.5 text-[10px] font-bold ${
-                      act.environmentType.includes('Esteira')
-                        ? 'bg-sky-500/15 text-sky-300 border border-sky-500/30'
-                        : 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-                    }`}
-                  >
-                    <MapPin className="inline h-2.5 w-2.5 mr-0.5" />
-                    {act.environmentType}
-                  </span>
-                  <span className="truncate text-xs font-bold text-white">
-                    {act.name}
-                  </span>
-                </div>
-
-                <div className="mt-1.5 flex flex-wrap items-center gap-3 text-[11px] text-slate-400">
-                  <span>Data: {act.date}</span>
-                  <span className="font-semibold text-slate-200">
-                    Distância: {act.distanceKm.toFixed(2)} km
-                  </span>
-                  <span className="inline-flex items-center gap-1 text-emerald-400 font-semibold">
-                    <Timer className="h-3 w-3" />
-                    Pace: {act.paceFormatted}
-                  </span>
-                  {act.averageHeartrate && (
-                    <span className="inline-flex items-center gap-1 text-rose-400">
-                      <Heart className="h-3 w-3" /> {act.averageHeartrate} bpm
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <div className="shrink-0 text-right">
-                <div className="rounded-lg bg-orange-500/15 border border-orange-500/30 px-2.5 py-1 text-xs font-extrabold text-orange-300">
-                  +{act.activeCalories} kcal
-                </div>
-                <div className="text-[10px] text-slate-500 mt-0.5">
-                  {act.movingTimeMinutes} min ativos
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* 5. ADIÇÃO RÁPIDA 1-CLICK (ALIMENTOS BASE DA ROTINA) */}
+      {/* 6. ADIÇÃO RÁPIDA 1-CLICK (ALIMENTOS BASE DA ROTINA) */}
       <section className="rounded-2xl border border-slate-800 bg-slate-900/90 p-4">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <div>
             <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
-              <span>Adição Rápida (1-Click)</span>
+              <span>Adição Rápida de Alimentos (1-Click)</span>
             </h3>
             <p className="text-xs text-slate-400">
-              Abate automaticamente os macros do seu orçamento diário
+              Toque com o polegar para lançar direto na janela escolhida
             </p>
           </div>
 
@@ -683,7 +526,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         </div>
       </section>
 
-      {/* 6. CONTADOR RÁPIDO DE ÁGUA E PASSOS DIÁRIOS */}
+      {/* 7. CONTADOR RÁPIDO DE ÁGUA E PASSOS DIÁRIOS */}
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div
           className={`rounded-2xl border p-4 ${
@@ -790,7 +633,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         </div>
       </section>
 
-      {/* 7. CARTÃO DE MÉTRICAS BASE DA BALANÇA (ZEPP LIFE OCR) */}
+      {/* 8. CARTÃO DE MÉTRICAS BASE DA BALANÇA (ZEPP LIFE OCR) */}
       <section className="rounded-2xl border border-slate-800 bg-slate-900/90 p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
