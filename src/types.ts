@@ -38,14 +38,8 @@ export interface UserProfile {
   name: string;
   heightCm: number;
   weightKg: number;
-  bodyFatPct: number;
-  bodyWaterPct: number;
-  muscleMassKg: number;
-  bmrKcal: number;
-  visceralFat: number;
-  proteinPct: number;
-  boneMassKg: number;
   bmi: number;
+  bmrKcal: number;
   proteinTargetMinG: number;
   proteinTargetMaxG: number;
   carbsBudgetG: number;
@@ -101,20 +95,11 @@ export interface DailyHabitsLog {
   activeWorkoutDayId?: WorkoutDayId;
 }
 
-export interface BioimpedanceCheckin {
+export interface WeightCheckin {
   id: string;
-  date: string;
-  weekLabel: string;
-  weightKg: number;
-  bmi: number;
-  bodyFatPct: number;
-  waterPct: number;
-  bmrKcal: number;
-  visceralFat: number;
-  muscleMassKg: number;
-  proteinPct: number;
-  boneMassKg: number;
-  source?: 'zepp_seed' | 'gemini_ocr';
+  date: string; // YYYY-MM-DD
+  weekLabel: string; // Ex: "20/Ago/2026"
+  weightKg: number; // Campo central da balança comum
   notes?: string;
 }
 
@@ -147,6 +132,6 @@ export interface AppState {
   habitsByDate: Record<string, DailyHabitsLog>;
   activitiesByDate: Record<string, CardiorespiratoryActivity[]>;
   workoutPlans: WorkoutDayPlan[];
-  checkins: BioimpedanceCheckin[];
+  checkins: WeightCheckin[];
   syncConfig: SyncConfiguration;
 }

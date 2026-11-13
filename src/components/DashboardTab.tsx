@@ -633,13 +633,13 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         </div>
       </section>
 
-      {/* 8. CARTÃO DE MÉTRICAS BASE DA BALANÇA (ZEPP LIFE OCR) */}
+      {/* 8. CARTÃO DE MÉTRICAS BASE DA BALANÇA (REGISTRO DE PESO) */}
       <section className="rounded-2xl border border-slate-800 bg-slate-900/90 p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <Scale className="h-4 w-4 text-emerald-400" />
             <h3 className="text-sm font-bold text-white">
-              Última Avaliação Zepp Life ({latestCheckin?.weekLabel || '17/Set/2026'})
+              Registro de Peso ({latestCheckin?.weekLabel || 'Mais recente'})
             </h3>
           </div>
           <button
@@ -647,12 +647,12 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             onClick={() => onNavigateTab('checkin')}
             className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-400 hover:text-emerald-300 cursor-pointer"
           >
-            <span>Enviar Print OCR</span>
+            <span>Registrar Peso</span>
             <ChevronRight className="h-3.5 w-3.5" />
           </button>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-2.5">
             <div className="text-[10px] uppercase text-slate-400">Peso Atual</div>
             <div className="mt-0.5 text-base font-extrabold text-white">
@@ -662,32 +662,28 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           </div>
 
           <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-2.5">
-            <div className="text-[10px] uppercase text-slate-400">Gordura (BF)</div>
-            <div className="mt-0.5 text-base font-extrabold text-amber-400">
-              {(latestCheckin?.bodyFatPct ?? profile.bodyFatPct).toFixed(1)}%
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-2.5">
-            <div className="text-[10px] uppercase text-slate-400">Massa Muscular</div>
+            <div className="text-[10px] uppercase text-slate-400">Variação Total</div>
             <div className="mt-0.5 text-base font-extrabold text-emerald-400">
-              {(latestCheckin?.muscleMassKg ?? profile.muscleMassKg).toFixed(2)}{' '}
-              <span className="text-[11px] font-normal text-slate-400">kg</span>
+              {checkins.length > 1
+                ? `${(latestCheckin ? latestCheckin.weightKg - checkins[0].weightKg : 0) > 0 ? '+' : ''}${(
+                    (latestCheckin ? latestCheckin.weightKg : profile.weightKg) - checkins[0].weightKg
+                  ).toFixed(2)} kg`
+                : '0.00 kg'}
             </div>
           </div>
 
           <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-2.5">
-            <div className="text-[10px] uppercase text-slate-400">Água Corporal</div>
-            <div className="mt-0.5 text-base font-extrabold text-sky-400">
-              {(latestCheckin?.waterPct ?? profile.bodyWaterPct).toFixed(1)}%
+            <div className="text-[10px] uppercase text-slate-400">Metabolismo Basal</div>
+            <div className="mt-0.5 text-base font-extrabold text-slate-100">
+              {profile.bmrKcal}{' '}
+              <span className="text-[11px] font-normal text-slate-400">kcal</span>
             </div>
           </div>
 
-          <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-2.5 col-span-2 sm:col-span-1">
-            <div className="text-[10px] uppercase text-slate-400">Metab. Basal</div>
-            <div className="mt-0.5 text-base font-extrabold text-slate-100">
-              {latestCheckin?.bmrKcal ?? profile.bmrKcal}{' '}
-              <span className="text-[11px] font-normal text-slate-400">kcal</span>
+          <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-2.5">
+            <div className="text-[10px] uppercase text-slate-400">Meta Proteica</div>
+            <div className="mt-0.5 text-base font-extrabold text-emerald-400">
+              {profile.proteinTargetMinG}–{profile.proteinTargetMaxG}g
             </div>
           </div>
         </div>

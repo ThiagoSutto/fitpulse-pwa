@@ -3,7 +3,7 @@ import {
   QuickFoodPreset,
   UserProfile,
   WorkoutDayPlan,
-  BioimpedanceCheckin,
+  WeightCheckin,
   ExerciseTemplate,
   CardiorespiratoryActivity,
 } from '../types';
@@ -12,14 +12,8 @@ export const INITIAL_USER_PROFILE: UserProfile = {
   name: 'Atleta Baseline',
   heightCm: 178,
   weightKg: 89.50,
-  bodyFatPct: 25.9,
-  bodyWaterPct: 50.8,
-  muscleMassKg: 62.89,
-  bmrKcal: 1898,
-  visceralFat: 10,
-  proteinPct: 16.4,
-  boneMassKg: 3.31,
   bmi: 28.2,
+  bmrKcal: 1898,
   proteinTargetMinG: 160,
   proteinTargetMaxG: 180,
   carbsBudgetG: 200,
@@ -165,7 +159,6 @@ const createDefaultSets = (count: number, defaultWeight: number, defaultReps = 1
     completed: false,
   }));
 
-// Regra Global Diária: Todos os dias de treino incluem fixamente 2 séries de Abdominal Infra e 2 séries de Abdominal na Máquina
 const createGlobalDailyAbsExercises = (prefix: string): ExerciseTemplate[] => [
   {
     id: `${prefix}_abs_infra`,
@@ -445,60 +438,31 @@ export const INITIAL_WORKOUT_PLANS: WorkoutDayPlan[] = [
   },
 ];
 
-// Histórico de Bioimpedância nas datas reais de avaliação:
-// 20 de agosto, 28 de agosto e 17 de setembro de 2026
-export const INITIAL_CHECKINS: BioimpedanceCheckin[] = [
+// Histórico simplificado focado em Peso (kg) da balança comum
+export const INITIAL_CHECKINS: WeightCheckin[] = [
   {
     id: 'checkin_2026_08_20',
     date: '2026-08-20',
     weekLabel: '20/Ago/2026',
     weightKg: 90.80,
-    bmi: 28.7,
-    bodyFatPct: 26.6,
-    waterPct: 50.2,
-    bmrKcal: 1912,
-    visceralFat: 11,
-    muscleMassKg: 62.55,
-    proteinPct: 16.1,
-    boneMassKg: 3.30,
-    source: 'zepp_seed',
-    notes: '1ª Avaliação Zepp Life (20 de agosto de 2026)',
+    notes: '1ª Pesagem de controle',
   },
   {
     id: 'checkin_2026_08_28',
     date: '2026-08-28',
     weekLabel: '28/Ago/2026',
     weightKg: 90.15,
-    bmi: 28.5,
-    bodyFatPct: 26.2,
-    waterPct: 50.5,
-    bmrKcal: 1904,
-    visceralFat: 10,
-    muscleMassKg: 62.72,
-    proteinPct: 16.2,
-    boneMassKg: 3.30,
-    source: 'zepp_seed',
-    notes: '2ª Avaliação Zepp Life (28 de agosto de 2026)',
+    notes: '2ª Pesagem de controle',
   },
   {
     id: 'checkin_2026_09_17',
     date: '2026-09-17',
     weekLabel: '17/Set/2026',
     weightKg: 89.50,
-    bmi: 28.2,
-    bodyFatPct: 25.9,
-    waterPct: 50.8,
-    bmrKcal: 1898,
-    visceralFat: 10,
-    muscleMassKg: 62.89,
-    proteinPct: 16.4,
-    boneMassKg: 3.31,
-    source: 'zepp_seed',
-    notes: '3ª Avaliação Oficial Zepp Life (17 de setembro de 2026 - Linha de Base)',
+    notes: '3ª Pesagem (Linha de Base)',
   },
 ];
 
-// Exemplos iniciais pré-carregados de atividades cardiorrespiratórias e desportivas
 export const INITIAL_CARDIO_ACTIVITIES: CardiorespiratoryActivity[] = [
   {
     id: 'cardio_act_1',

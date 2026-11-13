@@ -8,7 +8,6 @@ import {
   CheckCircle2,
   AlertCircle,
   Code2,
-  KeyRound,
 } from 'lucide-react';
 import { AppState, SyncConfiguration } from '../types';
 import {
@@ -60,43 +59,7 @@ export const SyncTab: React.FC<SyncTabProps> = ({
 
   return (
     <div className="space-y-4 pb-6">
-      {/* 1. CHAVE DE API DO GOOGLE GEMINI (VISION OCR ZEPP LIFE) */}
-      <section className="rounded-2xl border border-emerald-500/30 bg-slate-900/90 p-4">
-        <div className="flex items-center gap-2.5 mb-2">
-          <KeyRound className="h-5 w-5 text-emerald-400" />
-          <div>
-            <h2 className="text-sm font-bold text-white">
-              Google Gemini Vision API Key (OCR de Prints Zepp Life)
-            </h2>
-            <p className="text-xs text-slate-400">
-              Usada na aba Zepp OCR para extrair as 9 métricas via JSON Schema com o modelo `gemini-3.8-flash`.
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-2">
-          <label
-            htmlFor="gemini-api-key"
-            className="block text-[11px] font-semibold text-slate-300 mb-1"
-          >
-            GEMINI_API_KEY (Opcional — possui parser OCR local integrado caso vazio)
-          </label>
-          <input
-            id="gemini-api-key"
-            name="geminiApiKey"
-            type="password"
-            value={syncConfig.geminiApiKey || ''}
-            onChange={(e) => onUpdateSyncConfig({ geminiApiKey: e.target.value })}
-            placeholder="AIzaSy..."
-            autoCorrect="off"
-            autoCapitalize="off"
-            spellCheck={false}
-            className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-base text-white"
-          />
-        </div>
-      </section>
-
-      {/* 2. PROVEDOR DE PERSISTÊNCIA */}
+      {/* 1. PROVEDOR DE PERSISTÊNCIA */}
       <section className="rounded-2xl border border-slate-800 bg-slate-900/90 p-4">
         <div className="flex items-center gap-2.5 mb-2">
           <Cloud className="h-5 w-5 text-emerald-400" />

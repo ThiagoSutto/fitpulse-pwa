@@ -83,10 +83,6 @@ export function generateGeminiMarkdownReport(state: AppState): string {
     latestCheckin && firstCheckin
       ? (latestCheckin.weightKg - firstCheckin.weightKg).toFixed(2)
       : '0.00';
-  const bfDelta =
-    latestCheckin && firstCheckin
-      ? (latestCheckin.bodyFatPct - firstCheckin.bodyFatPct).toFixed(1)
-      : '0.0';
 
   const workoutSummaryLines = workoutPlans.map((plan) => {
     const exSummaries = plan.exercises.map((ex) => {
@@ -134,19 +130,18 @@ export function generateGeminiMarkdownReport(state: AppState): string {
 
 ---
 
-## 1. Histórico & Último Check-in de Bioimpedância (Zepp Life OCR)
-- **Avaliações Históricas:** ${checkins
-    .map((c) => `${c.weekLabel} (${c.weightKg.toFixed(2)}kg / ${c.bodyFatPct.toFixed(1)}% BF)`)
+## 1. Histórico & Último Registro de Peso
+- **Registros Históricos:** ${checkins
+    .map((c) => `${c.weekLabel} (${c.weightKg.toFixed(2)} kg)`)
     .join(' -> ')}
 ${
   latestCheckin
-    ? `- **Última Avaliação (${latestCheckin.date} - ${latestCheckin.weekLabel}):**
-- **Peso Corporal:** ${latestCheckin.weightKg.toFixed(2)} kg (Variação desde 20/08/2026: ${weightDelta} kg)
-- **Gordura Corporal (BF):** ${latestCheckin.bodyFatPct.toFixed(1)}% (Variação desde 20/08/2026: ${bfDelta}%)
-- **Massa Muscular:** ${latestCheckin.muscleMassKg.toFixed(2)} kg | **Água Corporal:** ${latestCheckin.waterPct.toFixed(1)}%
-- **Metabolismo Basal (BMR):** ${latestCheckin.bmrKcal} kcal | **IMC:** ${latestCheckin.bmi.toFixed(1)}
-- **Gordura Visceral:** Nível ${latestCheckin.visceralFat} | **Proteína Corporal:** ${latestCheckin.proteinPct.toFixed(1)}% | **Massa Óssea:** ${latestCheckin.boneMassKg.toFixed(2)} kg`
-    : '- Sem check-ins registrados.'
+    ? `- **Último Registro (${latestCheckin.date} - ${latestCheckin.weekLabel}):**
+  - **Peso Corporal:** ${latestCheckin.weightKg.toFixed(2)} kg
+  - **Variação Total:** ${Number(weightDelta) > 0 ? `+${weightDelta}` : weightDelta} kg (desde o início em 20/08/2026)${
+        latestCheckin.notes ? `\n  - **Observações:** ${latestCheckin.notes}` : ''
+      }`
+    : '- Sem registros de peso cadastrados.'
 }
 
 ---

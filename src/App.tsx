@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import {
   AppState,
-  BioimpedanceCheckin,
+  WeightCheckin,
   CardiorespiratoryActivity,
   FoodItem,
   MealWindowId,
@@ -232,8 +232,8 @@ export function App() {
     }));
   };
 
-  const handleAddCheckin = (checkin: Omit<BioimpedanceCheckin, 'id'>) => {
-    const newEntry: BioimpedanceCheckin = {
+  const handleAddCheckin = (checkin: Omit<WeightCheckin, 'id'>) => {
+    const newEntry: WeightCheckin = {
       ...checkin,
       id: `checkin_${Date.now()}`,
     };
@@ -242,14 +242,6 @@ export function App() {
       profile: {
         ...prev.profile,
         weightKg: checkin.weightKg,
-        bmi: checkin.bmi,
-        bodyFatPct: checkin.bodyFatPct,
-        bodyWaterPct: checkin.waterPct,
-        bmrKcal: checkin.bmrKcal,
-        visceralFat: checkin.visceralFat,
-        muscleMassKg: checkin.muscleMassKg,
-        proteinPct: checkin.proteinPct,
-        boneMassKg: checkin.boneMassKg,
       },
       checkins: [...prev.checkins, newEntry],
     }));
@@ -305,8 +297,8 @@ export function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
-      {/* HEADER FIXO MOBILE-FIRST */}
-      <header className="sticky top-0 z-30 border-b border-slate-800/80 bg-slate-950/90 backdrop-blur-md">
+      {/* HEADER FIXO MOBILE-FIRST COM SAFE AREA (NOTCH / DYNAMIC ISLAND) */}
+      <header className="sticky top-0 z-30 border-b border-slate-800/80 bg-slate-950/90 backdrop-blur-md pt-[max(env(safe-area-inset-top),1rem)]">
         <div className="mx-auto flex max-w-xl items-center justify-between gap-2 px-4 py-3">
           <div className="flex items-center gap-2.5">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-400">
@@ -322,8 +314,7 @@ export function App() {
                 </span>
               </div>
               <p className="text-[11px] text-slate-400">
-                {state.profile.weightKg.toFixed(2)}kg • BF {state.profile.bodyFatPct}% • BMR{' '}
-                {state.profile.bmrKcal}
+                {state.profile.weightKg.toFixed(2)}kg • BMR {state.profile.bmrKcal} kcal
               </p>
             </div>
           </div>
@@ -414,10 +405,10 @@ export function App() {
         )}
       </main>
 
-      {/* BOTTOM NAVIGATION BAR */}
+      {/* BOTTOM NAVIGATION BAR COM SAFE AREA (HOME INDICATOR) */}
       <nav
         aria-label="Navegação Principal"
-        className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-800/90 bg-slate-950/95 backdrop-blur-lg"
+        className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-800/90 bg-slate-950/95 backdrop-blur-lg pb-[max(env(safe-area-inset-bottom),1rem)]"
       >
         <div className="mx-auto grid max-w-xl grid-cols-5 gap-1 px-2 py-1.5">
           {(
@@ -425,7 +416,7 @@ export function App() {
               { id: 'dashboard', label: 'Início', icon: Activity },
               { id: 'nutrition', label: 'Nutrição', icon: Utensils },
               { id: 'workout', label: 'Treino PPL', icon: Dumbbell },
-              { id: 'checkin', label: 'Zepp OCR', icon: Scale },
+              { id: 'checkin', label: 'Check-in', icon: Scale },
               { id: 'sync', label: 'Cloud/API', icon: Cloud },
             ] as const
           ).map((nav) => {
