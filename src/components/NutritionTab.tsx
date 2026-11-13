@@ -13,6 +13,8 @@ import {
   CheckCircle2,
   Calculator,
   Flame,
+  ChevronDown,
+  Scale,
 } from 'lucide-react';
 import { AppState, FoodItem, MealWindowId } from '../types';
 import { MEAL_WINDOWS, QUICK_FOOD_PRESETS } from '../data/initialData';
@@ -21,6 +23,14 @@ import {
   OpenFoodFactsProduct,
   TACO_BRAZIL_DATABASE,
 } from '../services/openFoodFacts';
+import {
+  HouseholdMeasureId,
+  HOUSEHOLD_MEASURES,
+  HOUSEHOLD_MEASURES_LIST,
+  calculateTotalGrams,
+  formatPortionDescription,
+  calculateMacrosFromGrams,
+} from '../utils/householdMeasures';
 
 interface NutritionTabProps {
   state: AppState;
@@ -30,8 +40,6 @@ interface NutritionTabProps {
   onUpdateWater: (deltaCups: number) => void;
   onUpdateSteps: (steps: number) => void;
 }
-
-const PORTION_CHIPS = [30, 50, 100, 150, 200, 250];
 
 export const NutritionTab: React.FC<NutritionTabProps> = ({
   state,
@@ -48,7 +56,8 @@ export const NutritionTab: React.FC<NutritionTabProps> = ({
     () => TACO_BRAZIL_DATABASE.slice(0, 8)
   );
   const [isOnlineOff, setIsOnlineOff] = useState(false);
-  const [portionGrams, setPortionGrams] = useState<number>(100);
+  const [selectedMeasure, setSelectedMeasure] = useState<HouseholdMeasureId>('escumadeira');
+  const [measureQuantity, setMeasureQuantity] = useState<number>(1);
   const [feedbackBanner, setFeedbackBanner] = useState<string | null>(null);
 
   const { profile, selectedDate, foodsByDate, habitsByDate, activitiesByDate } = state;
@@ -116,27 +125,87 @@ export const NutritionTab: React.FC<NutritionTabProps> = ({
     setIsSearching(false);
   };
 
-  const handleSelectFoodProduct = (prod: OpenFoodFactsProduct, customGrams?: number) => {
-    const gramsToUse = customGrams ?? Math.max(1, portionGrams);
-    const factor = gramsToUse / 100;
-    const addedKcal = Math.round(prod.caloriesPer100g * factor);
-    const addedProt = Math.round(prod.proteinPer100g * factor * 10) / 10;
-    const addedCarbs = Math.round(prod.carbsPer100g * factor * 10) / 10;
-    const addedFat = Math.round(prod.fatPer100g * factor * 10) / 10;
+  const currentMeasure = HOUSEHOLD_MEASURES[selectedMeasure] || HOUSEHOLD_MEASURES.gramas;
+  const totalCalculatedGrams = calculateTotalGrams(selectedMeasure, measureQuantity);
+
+  const handleDecrementQuantity = () => {
+    if (selectedMeasure === 'gramas') {
+      setMeasureQuantity((prev) => Math.max(5, prev - 10));
+    } else {
+      setMeasureQuantity((prev) => {
+        if (prev <= 1) return Math.max(0.5, prev - 0.5);
+        return Math.max(0.5, prev - 1);
+      });
+    }
+  };
+
+  const handleIncrementQuantity = () => {
+    if (selectedMeasure === 'gramas') {
+      setMeasureQuantity((prev) => prev + 10);
+    } else {
+      setMeasureQuantity((prev) => prev + 1);
+    }
+  };
+
+  const handleMeasureChange = (newMeasureId: HouseholdMeasureId) => {
+    const prevMeasure = selectedMeasure;
+    setSelectedMeasure(newMeasureId);
+
+    if (newMeasureId === 'gramas') {
+      const equiv = calculateTotalGrams(prevMeasure, measureQuantity);
+      setMeasureQuantity(equiv > 0 ? equiv : 100);
+    } else if (prevMeasure === 'gramas') {
+      const targetDef = HOUSEHOLD_MEASURES[newMeasureId];
+      const approxUnits = Math.max(1, Math.round(measureQuantity / targetDef.grams));
+      setMeasureQuantity(approxUnits);
+    } else {
+      if (measureQuantity <= 0) setMeasureQuantity(1);
+    }
+  };
+
+  const getSuggestedMeasure = (prodName: string): HouseholdMeasureId | null => {
+    const lower = prodName.toLowerCase();
+    if (lower.includes('arroz')) return 'escumadeira';
+    if (lower.includes('feijão') || lower.includes('feijao') || lower.includes('sopa') || lower.includes('caldo')) return 'concha';
+    if (lower.includes('frango') || lower.includes('carne') || lower.includes('bife') || lower.includes('peixe') || lower.includes('patinho') || lower.includes('alcatra')) return 'file_medio';
+    if (lower.includes('ovo')) return 'unidade';
+    if (lower.includes('pão') || lower.includes('pao') || lower.includes('torrada') || lower.includes('queijo')) return 'fatia';
+    if (lower.includes('creatina') || lower.includes('canela') || lower.includes('açúcar') || lower.includes('acucar')) return 'colher_cha';
+    if (lower.includes('azeite') || lower.includes('óleo') || lower.includes('manteiga') || lower.includes('pasta de amendoim') || lower.includes('aveia') || lower.includes('whey')) return 'colher_sopa';
+    return null;
+  };
+
+  const handleSelectFoodProduct = (
+    prod: OpenFoodFactsProduct,
+    customGrams?: number,
+    customPortionLabel?: string
+  ) => {
+    const gramsToUse = customGrams ?? Math.max(1, totalCalculatedGrams);
+    const portionLabelToUse =
+      customPortionLabel ??
+      formatPortionDescription(selectedMeasure, measureQuantity, gramsToUse);
+
+    const macros = calculateMacrosFromGrams(
+      gramsToUse,
+      prod.caloriesPer100g,
+      prod.proteinPer100g,
+      prod.carbsPer100g,
+      prod.fatPer100g
+    );
 
     onAddFoodItem({
       name: prod.name,
-      portionLabel: `${gramsToUse}g`,
+      portionLabel: portionLabelToUse,
       grams: gramsToUse,
-      calories: addedKcal,
-      protein: addedProt,
-      carbs: addedCarbs,
-      fat: addedFat,
+      calories: macros.calories,
+      protein: macros.protein,
+      carbs: macros.carbs,
+      fat: macros.fat,
       source: prod.sourceType,
       mealWindow: selectedWindow,
     });
     showToast(
-      `${prod.name} (${gramsToUse}g) lançado! Abatido: ${addedKcal} kcal e ${addedProt}g P do orçamento.`
+      `${prod.name} (${portionLabelToUse}) lançado! Abatido: ${macros.calories} kcal e ${macros.protein}g P do orçamento.`
     );
   };
 
@@ -386,7 +455,7 @@ export const NutritionTab: React.FC<NutritionTabProps> = ({
                 Pesquisa de Alimentos (Tabela TACO + Open Food Facts API)
               </h3>
               <p className="text-[11px] text-slate-400">
-                Selecione a porção em gramas e clique em Adicionar para calcular e abater do orçamento
+                Selecione a medida caseira ou gramas e clique em Abater para deduzir automaticamente do orçamento diário
               </p>
             </div>
           </div>
@@ -431,43 +500,115 @@ export const NutritionTab: React.FC<NutritionTabProps> = ({
             </button>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-800 bg-slate-950 p-2.5">
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-bold text-slate-300">Porção:</span>
-              <div className="flex flex-wrap gap-1">
-                {PORTION_CHIPS.map((g) => (
-                  <button
-                    key={g}
-                    type="button"
-                    onClick={() => setPortionGrams(g)}
-                    className={`rounded-lg px-2 py-1 text-xs font-bold transition cursor-pointer ${
-                      portionGrams === g
-                        ? 'bg-emerald-500 text-slate-950'
-                        : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
-                    }`}
-                  >
-                    {g}g
-                  </button>
-                ))}
+          {/* GRUPO DE MEDIDAS CASEIRAS & QUANTIDADE */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-950 p-3.5 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5">
+                <Scale className="h-4 w-4 text-emerald-400" />
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                  Quantidade & Medida Caseira
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-slate-400">Total Calculado:</span>
+                <span className="rounded-lg bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-0.5 text-xs font-extrabold text-emerald-300">
+                  ~{totalCalculatedGrams}g
+                </span>
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1">
-              <label htmlFor="portion-grams" className="text-[11px] text-slate-400">
-                Personalizar:
-              </label>
-              <input
-                id="portion-grams"
-                name="portionGrams"
-                type="text"
-                inputMode="numeric"
-                value={portionGrams}
-                onChange={(e) =>
-                  setPortionGrams(Number(e.target.value.replace(/\D/g, '')) || 0)
-                }
-                className="w-14 bg-transparent text-center text-sm font-extrabold text-emerald-400 focus:outline-none"
-              />
-              <span className="text-xs text-slate-400">g</span>
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center">
+              {/* Stepper [ - ] [ Qtd ] [ + ] */}
+              <div className="sm:col-span-5 flex items-center gap-1.5 bg-slate-900 border border-slate-800 rounded-xl p-1">
+                <button
+                  type="button"
+                  onClick={handleDecrementQuantity}
+                  aria-label="Diminuir quantidade"
+                  className="touch-target flex h-11 w-11 items-center justify-center rounded-lg bg-slate-950 border border-slate-800 text-slate-200 hover:text-white hover:bg-slate-800 active:scale-95 transition text-lg font-black cursor-pointer"
+                >
+                  -
+                </button>
+
+                <div className="flex-1 flex flex-col items-center justify-center px-1">
+                  <label htmlFor="measure-quantity-input" className="sr-only">
+                    Quantidade da porção
+                  </label>
+                  <input
+                    id="measure-quantity-input"
+                    name="measureQuantity"
+                    type="number"
+                    inputMode={selectedMeasure === 'gramas' ? 'numeric' : 'decimal'}
+                    step={selectedMeasure === 'gramas' ? '5' : '0.5'}
+                    min={currentMeasure.min}
+                    value={measureQuantity}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value);
+                      setMeasureQuantity(isNaN(v) ? 0 : v);
+                    }}
+                    className="w-full bg-transparent text-center text-lg font-black text-emerald-400 focus:outline-none"
+                  />
+                  <span className="text-[10px] text-slate-400 font-semibold truncate max-w-[120px]">
+                    {selectedMeasure === 'gramas' ? 'gramas' : currentMeasure.shortLabel}
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleIncrementQuantity}
+                  aria-label="Aumentar quantidade"
+                  className="touch-target flex h-11 w-11 items-center justify-center rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/30 active:scale-95 transition text-lg font-black cursor-pointer"
+                >
+                  +
+                </button>
+              </div>
+
+              {/* Dropdown Select com Hitbox Grande e Dark Mode iOS */}
+              <div className="sm:col-span-7 relative">
+                <label htmlFor="measure-select" className="sr-only">
+                  Selecione a medida caseira ou gramas
+                </label>
+                <select
+                  id="measure-select"
+                  name="householdMeasure"
+                  value={selectedMeasure}
+                  onChange={(e) => handleMeasureChange(e.target.value as HouseholdMeasureId)}
+                  className="touch-target w-full appearance-none rounded-xl border border-slate-700/80 bg-slate-900 px-3.5 py-3 pr-10 text-xs sm:text-sm font-bold text-white shadow-sm hover:border-emerald-500/50 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
+                >
+                  {HOUSEHOLD_MEASURES_LIST.map((m) => (
+                    <option key={m.id} value={m.id} className="bg-slate-950 text-white py-1">
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+                <div className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-emerald-400">
+                  <ChevronDown className="h-4 w-4" />
+                </div>
+              </div>
+            </div>
+
+            {/* Chips de Acesso Rápido para Medidas Mais Comuns */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-slate-800/80">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1">
+                Atalhos:
+              </span>
+              {HOUSEHOLD_MEASURES_LIST.map((m) => {
+                const active = selectedMeasure === m.id;
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => handleMeasureChange(m.id)}
+                    className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold transition cursor-pointer ${
+                      active
+                        ? 'bg-emerald-500 text-slate-950 font-bold shadow-sm'
+                        : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    {m.name} ({m.grams}g)
+                  </button>
+                );
+              })}
             </div>
           </div>
         </form>
@@ -475,12 +616,20 @@ export const NutritionTab: React.FC<NutritionTabProps> = ({
         <div className="mt-3 space-y-2">
           <div className="custom-scroller max-h-72 space-y-2 overflow-y-auto pr-1">
             {searchResults.map((prod) => {
-              const activeGrams = Math.max(1, portionGrams);
-              const factor = activeGrams / 100;
-              const calcKcal = Math.round(prod.caloriesPer100g * factor);
-              const calcProt = (prod.proteinPer100g * factor).toFixed(1);
-              const calcCarb = (prod.carbsPer100g * factor).toFixed(1);
-              const calcFat = (prod.fatPer100g * factor).toFixed(1);
+              const activeGrams = Math.max(1, totalCalculatedGrams);
+              const macros = calculateMacrosFromGrams(
+                activeGrams,
+                prod.caloriesPer100g,
+                prod.proteinPer100g,
+                prod.carbsPer100g,
+                prod.fatPer100g
+              );
+              const portionDesc = formatPortionDescription(
+                selectedMeasure,
+                measureQuantity,
+                activeGrams
+              );
+              const suggested = getSuggestedMeasure(prod.name);
 
               return (
                 <div
@@ -488,7 +637,7 @@ export const NutritionTab: React.FC<NutritionTabProps> = ({
                   className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 rounded-xl border border-slate-800 bg-slate-950/90 p-3 hover:border-emerald-500/40 transition"
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span
                         className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase ${
                           prod.sourceType === 'taco'
@@ -501,37 +650,37 @@ export const NutritionTab: React.FC<NutritionTabProps> = ({
                       <span className="truncate text-xs font-bold text-white">
                         {prod.name}
                       </span>
+                      {suggested && suggested !== selectedMeasure && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleMeasureChange(suggested);
+                            setMeasureQuantity(1);
+                          }}
+                          className="rounded bg-slate-800/80 border border-emerald-500/30 px-1.5 py-0.5 text-[10px] text-emerald-300 hover:bg-emerald-500/15 cursor-pointer"
+                          title={`Usar ${HOUSEHOLD_MEASURES[suggested].name} (~${HOUSEHOLD_MEASURES[suggested].grams}g)`}
+                        >
+                          Usar {HOUSEHOLD_MEASURES[suggested].name}
+                        </button>
+                      )}
                     </div>
                     <div className="mt-1 text-[11px] text-slate-400">
-                      Porção calculada ({activeGrams}g):{' '}
-                      <strong className="text-white">{calcKcal} kcal</strong> •{' '}
-                      <strong className="text-emerald-400">{calcProt}g Proteína</strong> •{' '}
-                      <span className="text-sky-300">{calcCarb}g Carbo</span> •{' '}
-                      <span className="text-amber-300">{calcFat}g Gordura</span>
+                      Porção ({portionDesc}):{' '}
+                      <strong className="text-white">{macros.calories} kcal</strong> •{' '}
+                      <strong className="text-emerald-400">{macros.protein}g Proteína</strong> •{' '}
+                      <span className="text-sky-300">{macros.carbs}g Carbo</span> •{' '}
+                      <span className="text-amber-300">{macros.fat}g Gordura</span>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0">
-                    {prod.defaultPortionGrams !== activeGrams && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleSelectFoodProduct(prod, prod.defaultPortionGrams)
-                        }
-                        className="rounded-xl border border-slate-700 bg-slate-900 px-2.5 py-2 text-[11px] font-semibold text-slate-300 hover:bg-slate-800 cursor-pointer"
-                        title={`Adicionar porção usual (${prod.defaultPortionGrams}g)`}
-                      >
-                        +{prod.defaultPortionGrams}g
-                      </button>
-                    )}
-
                     <button
                       type="button"
-                      onClick={() => handleSelectFoodProduct(prod, activeGrams)}
-                      className="touch-target flex items-center gap-1 rounded-xl bg-emerald-500 px-3 py-2 text-xs font-bold text-slate-950 hover:bg-emerald-400 cursor-pointer"
+                      onClick={() => handleSelectFoodProduct(prod)}
+                      className="touch-target flex items-center gap-1 rounded-xl bg-emerald-500 px-3 py-2 text-xs font-bold text-slate-950 hover:bg-emerald-400 active:scale-95 transition cursor-pointer"
                     >
                       <Plus className="h-3.5 w-3.5 stroke-[2.5]" />
-                      <span>Abater {activeGrams}g</span>
+                      <span>Abater {portionDesc}</span>
                     </button>
                   </div>
                 </div>
