@@ -1,0 +1,18 @@
+{
+  "name": "FitPulse Pro — Nutrição, PPL & Bioimpedância",
+  "short_name": "FitPulse",
+  "description": "Rastreamento nutricional mobile-first, treino Push/Pull/Legs de 5 dias e check-in semanal Zepp Life com exportação para o Gemini.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#10b981",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
